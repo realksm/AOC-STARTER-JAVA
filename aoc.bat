@@ -7,11 +7,10 @@ for /f %%A in ('echo prompt $E ^| cmd') do set "ESC=%%A"
 REM Colors
 set GREEN=%ESC%[32m
 set CYAN=%ESC%[36m
-set YELLOW=%ESC%[33m
-set RESET=%ESC%[0m
 
 REM Check command
 if "%1"=="gen" goto GEN
+if "%1"=="desc" goto DESC
 
 REM ===== RUN MODE =====
 echo %CYAN%[AoC] Compiling...%RESET%
@@ -24,5 +23,8 @@ goto END
 :GEN
 java -cp out\production\%MODULE% aoc.Main %*
 goto END
+
+:DESC
+java -cp out\production\%MODULE% aoc.Main %*
 
 :END
