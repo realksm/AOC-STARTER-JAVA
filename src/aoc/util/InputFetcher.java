@@ -30,11 +30,12 @@ public class InputFetcher {
         return resp.body();
     }
 
-    public static String fetchDescription(int day) throws Exception {
-        Path path = Paths.get("inputs/day%02d_desc.txt".formatted(day));
+    public static void fetchDescription(int day) throws Exception {
+        Path path = Paths.get("inputs/day%02d_desc.md".formatted(day));
 
         if (Files.exists(path)) {
-            return Files.readString(path);
+            Files.readString(path);
+            return;
         }
 
         String url = "https://adventofcode.com/%d/day/%d".formatted(AoCConfig.YEAR, day);
@@ -42,50 +43,67 @@ public class InputFetcher {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Cookie", "session=" + AoCConfig.SESSION)
-                .header("User-Agent", "AoC Java Client")
+                .header("User-Agent", "Mozilla/5.0 Java-AoC-Fetcher")
                 .GET()
                 .build();
 
         HttpResponse<String> response = HttpClient.newHttpClient()
                 .send(request, HttpResponse.BodyHandlers.ofString());
 
-        // Extract the <article> content which contains the puzzle text
         String html = response.body();
-        String startTag = "<article class=\"day-desc\">";
-        String endTag = "</article>";
 
-        int start = html.indexOf(startTag);
-        int end = html.lastIndexOf(endTag);
+        // Find all <article> tags (Part 1 and Part 2 are in separate articles)
+        StringBuilder markdown = new StringBuilder();
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("<article class=\"day-desc\">(.*?)</article>", java.util.regex.Pattern.DOTALL)
+                .matcher(html);
 
-        if (start == -1) throw new RuntimeException("Could not find puzzle description.");
+        while (matcher.find()) {
+            String content = matcher.group(1);
+            markdown.append(htmlToMarkdown(content)).append("\n\n");
+        }
 
-        String rawDesc = html.substring(start, end + endTag.length());
+        String result = markdown.toString().trim();
+        Files.createDirectories(path.getParent());
+        Files.writeString(path, result);
+    }
 
-        // Simple cleaning: Remove HTML tags and fix entities
-        String cleanDesc = rawDesc
-                .replaceAll("--- Day (\\d+): (.*) ---", "--- Day $1: $2 ---") // No color codes
-                .replaceAll("<[^>]*>", "")
-                .replaceAll("&gt;", ">")
+    private static String htmlToMarkdown(String html) {
+        return html
+                .replaceAll("<h2.*?>(.*?)</h2>", "## $1")            // Headers
+                .replaceAll("<code><em>(.*?)</em></code>", " `***$1***` ") // Bolded code
+                .replaceAll("<code>(.*?)</code>", " `$1` ")          // Inline code
+                .replaceAll("<em>(.*?)</em>", " **$1** ")            // Emphasis to Bold
+                .replaceAll("<ul>", "\n")                            // Lists
+                .replaceAll("<li>", "* ")
+                .replaceAll("</li>", "\n")
+                .replaceAll("</ul>", "\n")
+                .replaceAll("<p>", "\n")                             // Paragraphs
+                .replaceAll("</p>", "\n")
+                .replaceAll("<pre><code>", "\n```\n")                // Code blocks
+                .replaceAll("</code></pre>", "\n```\n")
+                .replaceAll("&gt;", ">")                             // Entities
                 .replaceAll("&lt;", "<")
-                .trim();
-
-        Files.writeString(path, cleanDesc);
-        return cleanDesc;
+                .replaceAll("&amp;", "&")
+                .replaceAll("<[^>]*>", "");                          // Strip remaining tags
     }
 
     public static void openDescription(int day) throws Exception {
-        Path path = Paths.get("inputs/day%02d_desc.txt".formatted(day));
+        Path path = Paths.get("inputs/day%02d_desc.md".formatted(day));
 
-        // 1. Fetch if it doesn't exist (using your existing logic)
         if (!Files.exists(path)) {
             fetchDescription(day);
         }
 
-        // 2. Open the file using the default system editor (Notepad/IntelliJ)
-        String os = System.getProperty("os.name").toLowerCase();
-        if (os.contains("win")) {
-            // "start" is the PowerShell/CMD command to open a file with its default app
-            new ProcessBuilder("cmd", "/c", "start", path.toString()).start();
+        if (java.awt.Desktop.isDesktopSupported()) {
+            java.awt.Desktop.getDesktop().open(path.toFile());
+        } else {
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("win")) {
+                new ProcessBuilder("cmd", "/c", "start", path.toString()).start();
+            } else if (os.contains("mac")) {
+                new ProcessBuilder("open", path.toString()).start();
+            }
         }
     }
 }
